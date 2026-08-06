@@ -1,0 +1,13 @@
+# Editor settings, so that a file leaves an editor in the shape .gitattributes
+# expects it to enter git in. The two files say the same thing to two different
+# tools, and neither one is enough on its own, because an editor does not read
+# .gitattributes and git does not open files.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2

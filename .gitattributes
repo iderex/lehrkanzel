@@ -1,0 +1,26 @@
+# What the bytes in this tree are allowed to be.
+#
+# Proof scripts are whitespace-sensitive in places, and a checker that reads the
+# source has to agree with itself on every machine that runs it. So the tree
+# holds one line ending and one character set, and git normalises on the way in
+# rather than leaving it to whoever cloned last.
+
+# Everything git detects as text is stored with LF in the object database and
+# checked out with LF, on every platform. A file added with CRLF is normalised
+# by `git add`; it is not refused, and the difference is visible in
+# `git ls-files --eol`.
+* text=auto eol=lf
+
+# The types this tree actually holds, declared rather than detected, so a file
+# that happens to start with an unusual byte is still treated as text.
+*.lean  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.json  text eol=lf
+*.toml  text eol=lf
+*.sh    text eol=lf
+
+# The toolchain pin is read by elan as a single line and a stray CR breaks the
+# version string it parses.
+lean-toolchain text eol=lf
