@@ -1,0 +1,101 @@
+# The checks that read a change rather than the tree.
+#
+# Every leg is deterministic: the same commit range, body and scopes give the
+# same verdict on any machine, and no leg makes a judgement. The rules live in
+# scripts/check-pr-hygiene.sh so a contributor can run the same thing before
+# pushing, and the fixtures that prove each leg bites run here first, so a guard
+# that stopped refusing anything fails as loudly as a change that trips one.
+#
+# The pull request body reaches the script through a file written from an
+# environment variable rather than through the shell, so nothing in a body is
+# ever expanded by the runner.
+#
+# The issue numbers whose scopes are read come from the script itself rather
+# than from a second expression here, because two places deciding what counts as
+# a named issue is two places to drift.
+name: pr-hygiene
+
+on:
+  pull_request:
+    branches: ["**"]
+
+# Read-only. The scope step reads issue bodies and writes nothing.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-hygiene:
+    # This name is the check-run name a protection rule would require. It is the
+    # same name the neighbouring board's rule already requires, which is what
+    # docs/parity.md records it as kept under.
+    name: Deterministic PR-hygiene checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The legs compare against the merge base, which a shallow clone does
+          # not carry.
+          fetch-depth: 0
+          # No step pushes via git, so do not persist the GITHUB_TOKEN in
+          # .git/config. The step that calls the API takes its token from the
+          # environment instead.
+          persist-credentials: false
+
+      - name: The legs are proven to bite
+        run: ./scripts/check-pr-hygiene-fixtures.sh
+
+      - name: Gather the change
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -eu
+          base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          echo "merge base: $base"
+          git diff --name-only "$base" "$HEAD_SHA" > change-files.txt
+          git diff --numstat "$base" "$HEAD_SHA" > change-numstat.txt
+          git log --format=%B "$base".."$HEAD_SHA" > change-messages.txt
+          printf '%s' "$PR_BODY" > change-body.md
+
+      - name: Read the scopes the named issues declare
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          : > change-scopes.txt
+          named=$(./scripts/check-pr-hygiene.sh \
+            --files change-files.txt --numstat change-numstat.txt \
+            --messages change-messages.txt --body change-body.md --print-named)
+          for n in $named; do
+            body=$(gh api "repos/$REPO/issues/$n" --jq '.body // ""' 2>/dev/null || true)
+            scope=$(printf '%s' "$body" | sed -n 's/^Scope: *//p' | head -1)
+            case "$scope" in
+              ""|*"not a tracked path"*)
+                echo "issue #$n declares no usable Scope"
+                ;;
+              *)
+                printf '%s\t%s\n' "$n" "$scope" >> change-scopes.txt
+                ;;
+            esac
+          done
+          echo "scopes read:"
+          cat change-scopes.txt
+
+      - name: Check
+        run: |
+          ./scripts/check-pr-hygiene.sh \
+            --files change-files.txt --numstat change-numstat.txt \
+            --messages change-messages.txt --body change-body.md \
+            --scopes change-scopes.txt \
+            --template .github/pull_request_template.md
