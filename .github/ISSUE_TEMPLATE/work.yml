@@ -1,0 +1,60 @@
+name: A piece of work
+description: Something that is wrong or missing, with the evidence for it and what would settle it.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The title says what the work is rather than which area it is in.
+
+        Every field below is asked because something reads it. If a field does
+        not apply, say so in it rather than leaving it empty.
+
+  - type: input
+    id: scope
+    attributes:
+      label: Scope
+      description: >-
+        The paths this work may write, space separated. A change that lands
+        outside them belongs to a different issue. Write the directory where the
+        exact file is not decided yet.
+      placeholder: docs/decisions/0002-proof-assistant-and-toolchain.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong
+      description: >-
+        The problem, not the solution. If the problem is that something does not
+        exist, say what breaks or stays unknowable while it does not.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: The evidence, and the command behind every number in it
+      description: >-
+        Every number here carries the command that produced it, run against the
+        reference the reader will have rather than a working tree. Paste the
+        command and its output together. Where the evidence is a judgement
+        rather than a measurement, write it as a claim and say so.
+      placeholder: |
+        gh api repos/OWNER/REPO --jq '.license'
+        null
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: >-
+        The conditions that let this issue be closed, each one a thing somebody
+        else can check. A guard is done when deleting it has been shown to turn
+        the run red. A number is done when the command that produces it is in
+        the pull request body.
+    validations:
+      required: true
