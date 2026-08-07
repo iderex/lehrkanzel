@@ -1,0 +1,45 @@
+# The form decision 0001 fixes for a decision file, made refusable.
+#
+# 0001 requires four sections and says a superseded decision is replaced by a
+# file that names the one it replaces. Its own closing paragraph records that
+# nothing refused either, and issue #1 is where the check was asked for. This is
+# that check. The rules live in scripts/check-decision-files.sh so a contributor
+# can run the same thing that runs here, before pushing, on a tree that has
+# nothing built in it.
+#
+# Read-only, no network beyond the checkout, and no version string of its own:
+# the script reads the tree.
+name: decision-files
+
+on:
+  # Every branch and every pull request. The decision files are written before
+  # anything else here exists, so this guard has to cover a branch that carries
+  # nothing but documents.
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+# Read-only: the check only reads the tracked tree.
+permissions:
+  contents: read
+
+# Cancel a superseded run on the same ref so a new push does not queue behind an
+# obsolete check.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  decision-files:
+    name: Decision files carry their sections and resolve their references
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes via git, so do not persist the GITHUB_TOKEN in .git/config.
+          persist-credentials: false
+      - name: Check the decision files
+        run: ./scripts/check-decision-files.sh
