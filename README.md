@@ -2,6 +2,14 @@
 
 High-energy physics has HepLean, the foundation exists in mathlib, and the work has been announced since 2023. The visible result is a machine-verified Noether theorem. This board carries the highest barrier to entry and the slowest feedback of its cohort, which is recorded before the work starts rather than discovered in month four, and its milestones are therefore small and each lands something checkable.
 
+Four things this project cannot claim, in the same words as
+[docs/limits.md](docs/limits.md). That formalising this helps research, because
+the value is expected rather than demonstrated. That it is a foundation for
+anything, until something is built on it. Completeness in any direction, because
+the plan is bounded and what is outside it is absent rather than pending. That a
+formal statement is the right formalisation of an informal one, because that
+judgement is made by people and can be wrong.
+
 There is a neighbouring library in this area, and what it already holds is
 worth knowing before reading further. PhysLean carries a variational calculus
 layer, a Euler-Lagrange operator for trajectories in an inner-product space,
