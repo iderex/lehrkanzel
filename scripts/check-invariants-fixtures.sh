@@ -263,6 +263,57 @@ expect prints toolchain-declared-once "toolchain-declared-once prints NOT MADE w
   "$shipped" "$(lean_list .github/workflows/build.yml)"
 echo
 
+# ----------------------------------------------------- dependency-declared-once
+#
+# The manifest here holds two packages, because the rule compares against every
+# revision it declares rather than only the one the decision file names, and a
+# fixture with one package could not tell the two apart. The revision pasted
+# into the workflow is the second package's, so a rule that read only the first
+# would pass this fixture.
+#
+# The file list for these cases carries the manifest and the workflow and not
+# lean-toolchain, so the toolchain rule prints NOT MADE beside these runs. That
+# is deliberate: NOT MADE is not a FAIL, so the exactness assertion still says
+# this fixture trips this rule and no other.
+cat > "$tree/lake-manifest.json" <<'EOF'
+{"version": "1.1.0",
+ "packages":
+ [{"url": "https://github.com/leanprover-community/batteries",
+   "name": "batteries",
+   "rev": "4a3f2d8b4e1c9d0a7b6e5f4c3d2a1b0e9f8d7c6b"},
+  {"url": "https://github.com/leanprover-community/mathlib4",
+   "name": "mathlib",
+   "rev": "905b95818eb32af7874a58b427f50c1711a5e96c"}]}
+EOF
+
+cat > "$tree/.github/workflows/pin.yml" <<'EOF'
+jobs:
+  build:
+    steps:
+      - run: lake update mathlib --rev 905b95818eb32af7874a58b427f50c1711a5e96c
+EOF
+expect trips dependency-declared-once "dependency-declared-once trips on a workflow repeating a revision the manifest declares" \
+  "$shipped" "$(lean_list lake-manifest.json .github/workflows/pin.yml)"
+
+cat > "$tree/.github/workflows/pin.yml" <<'EOF'
+jobs:
+  build:
+    steps:
+      - run: lake update mathlib --rev "$(jq -r '.packages[] | select(.name == "mathlib") | .rev' lake-manifest.json)"
+EOF
+expect passes dependency-declared-once "dependency-declared-once passes on the neighbour that reads the manifest instead" \
+  "$shipped" "$(lean_list lake-manifest.json .github/workflows/pin.yml)"
+
+cat > "$tree/.github/workflows/pin.yml" <<'EOF'
+jobs:
+  build:
+    steps:
+      - run: lake update mathlib --rev 905b95818eb32af7874a58b427f50c1711a5e96c
+EOF
+expect prints dependency-declared-once "dependency-declared-once prints NOT MADE when the tree declares no revision" \
+  "$shipped" "$(lean_list .github/workflows/pin.yml)"
+echo
+
 # -------------------------------------------------- every-rule-names-a-decision
 #
 # The one case that may not use the shipped rules: it needs a rule whose
