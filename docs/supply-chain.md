@@ -15,9 +15,13 @@ this repository examines.
 The audit is `.github/workflows/scorecard.yml`, which runs the OpenSSF Scorecard
 checks and uploads the result to code scanning. A second audit,
 `.github/workflows/zizmor.yml`, analyses the workflow definitions themselves and
-fails the run on any finding at low severity or above.
+fails the run on any finding at low severity or above. A third,
+`.github/workflows/codeql.yml`, reads the same definitions as a data-flow graph
+and fails on a finding the query pack reports at critical or high; it uploads
+into the same tab, so a finding it produces would appear in the list below
+beside the Scorecard ones. It produces none today.
 
-The list below was read on 2026-08-07 with
+The list below was read at `e2ca55c` with
 
     gh api repos/iderex/lehrkanzel/code-scanning/alerts \
       --jq '.[] | [.number, .rule.id, .state] | @tsv'
@@ -33,6 +37,12 @@ The list below was read on 2026-08-07 with
 
 Nine findings, and all nine are triaged below. The heading of each entry is the
 Scorecard check the alert reports, with the alert number that command prints.
+Every one of the nine comes from Scorecard, which is a fact about the tab rather
+than an assumption about it:
+
+    gh api repos/iderex/lehrkanzel/code-scanning/alerts \
+      --jq '[.[].tool.name] | unique | @tsv'
+    Scorecard
 
 ## The findings
 
@@ -56,9 +66,19 @@ of them do not exist yet.
 Fixed, and reported as fixed by the audit itself, which is why the command above
 prints `fixed` beside it rather than `open`.
 
-The workflow analysis in `.github/workflows/zizmor.yml` is a static analyser
-over the most privileged code in this repository, and it gates rather than
-reports.
+Two static analysers now run over the most privileged code in this repository,
+and both gate rather than report. `.github/workflows/zizmor.yml` judges the
+shape of a workflow document. `.github/workflows/codeql.yml` builds a data-flow
+graph over the expressions and follows an untrusted value into a place that
+executes it. They disagree in both directions on a fixture that was run through
+them, which is why both are kept: the record is in the pull request that landed
+the second one.
+
+What the second one refuses is bounded, and the bound belongs here rather than
+only in that file. The default query suite carries the critical and high
+variants of each query and not the medium ones, so the same injection in a
+workflow that declares no token scope is reported at a severity this gate never
+sees.
 
 This does not mean a source analyser covers the mathematical part of the tree.
 It does not, no such analyser is planned, and the reason is written into the
@@ -160,62 +180,73 @@ can be answered from things that exist rather than from intentions.
 ## The workflow hygiene rules
 
 Four rules are kept true about every workflow in this repository. They are not
-asserted here, they are decided by the two audits named above, and each rule
-below names what refuses a violation.
+asserted here, they are decided by the audits named above, and each rule below
+names what refuses a violation. The counts move whenever a workflow is added, so
+they are read again rather than carried forward; these were read at `e2ca55c`,
+where the directory holds eight files.
 
-Every action is pinned to an exact revision with the version in a comment. Read
-at `d90846b`:
+Every action is pinned to an exact revision with the version in a comment:
 
     git grep -h -E '^\s+(- )?uses:' -- .github/workflows \
       | grep -cvE '@[0-9a-f]{40} # '
     0
 
-Scorecard's Pinned-Dependencies check and zizmor's `unpinned-uses` rule both
-refuse a violation, and neither reports one.
+Scorecard's Pinned-Dependencies check, zizmor's `unpinned-uses` rule and
+CodeQL's `actions/unpinned-tag` all refuse a violation, and none reports one.
 
 Checkout never persists the token, because no step in this repository pushes
-with git. Read at `d90846b`:
+with git:
 
     git grep -c 'actions/checkout@' -- .github/workflows \
       | awk -F: '{s+=$2} END {print s}'
-    6
+    8
     git grep -c 'persist-credentials: false' -- .github/workflows \
       | awk -F: '{s+=$2} END {print s}'
-    6
+    8
 
 zizmor's `artipacked` rule refuses a checkout that leaves the token in
 `.git/config`.
 
 Permissions are declared at the narrowest scope that works. Every workflow
-declares a token scope at the top, five of them `contents: read` and the sixth
-an empty set, and a write scope appears only inside the two jobs that write.
-Read at `d90846b`:
+declares a token scope at the top, six of them `contents: read` and two an empty
+set, and a write scope appears only inside the three jobs that write:
 
     git grep -n -A1 '^permissions' -- .github/workflows
-    git grep -n -A4 '^    permissions:' -- .github/workflows
+    git grep -n -E '^      [a-z-]+: write' -- .github/workflows
+    .github/workflows/codeql.yml:61:      security-events: write # upload the SARIF into the code-scanning tab
+    .github/workflows/scorecard.yml:63:      security-events: write
+    .github/workflows/scorecard.yml:65:      id-token: write
+    .github/workflows/zizmor.yml:45:      security-events: write # upload the SARIF into the code-scanning tab
 
-Scorecard's Token-Permissions check and zizmor's `excessive-permissions` rule
-both refuse a violation, and neither reports one.
+Scorecard's Token-Permissions check, zizmor's `excessive-permissions` rule and
+CodeQL's `actions/missing-workflow-permissions` all refuse a violation, and none
+reports one. The last of those is not an assumption: it is one of the two
+findings the fixture in the pull request that landed the scanner was refused
+with.
 
-No job holds a write scope it does not use. The two that do are the Scorecard
+No job holds a write scope it does not use. The three that do are the Scorecard
 analysis job, which needs `security-events: write` to upload its result and
-`id-token: write` to publish the score, and the workflow analysis job, which
-needs `security-events: write` for the same reason. Both are declared on the job
-rather than on the workflow.
+`id-token: write` to publish the score, and the two scanning jobs, each of which
+needs `security-events: write` for the same reason. All are declared on the job
+rather than on the workflow, which is what the second command above shows by
+matching only at that indentation.
 
 No deliberate exception to any of these four rules exists in this repository
 today, so no workflow file carries one. When one is taken, the reason goes in
 the workflow file it applies to rather than here, because the reader who needs
 it is reading that file.
 
-The two audits were last observed green on `d90846b`:
+The three audits were last observed green on `e2ca55c`:
 
-    gh run list --repo iderex/lehrkanzel --branch main --limit 6 \
+    gh run list --repo iderex/lehrkanzel --branch main --limit 10 \
       --json databaseId,workflowName,conclusion,headSha \
-      --jq '.[] | [.databaseId, .workflowName, .conclusion,
-             (.headSha[0:7])] | @tsv'
-    31190711614	Scorecard supply-chain security	success	d90846b
-    31190710831	Workflow Security Analysis	success	d90846b
+      --jq '.[] | select(.headSha|startswith("e2ca55c"))
+             | [.databaseId, .workflowName, .conclusion] | @tsv'
+    31254098571	unicode-guard	success
+    31254098583	decision-files	success
+    31254098574	codeql	success
+    31254098593	Workflow Security Analysis	success
+    31254098567	Scorecard supply-chain security	success
 
 ## The object cache
 
