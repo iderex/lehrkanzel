@@ -1,18 +1,24 @@
 # Deliberate violation. This file exists for one commit, to show that the gate
-# added in the previous commit refuses the finding class it names, and it is
+# added earlier in this branch refuses the finding class it names, and it is
 # deleted in the commit after this one. It never runs: a pull_request_target
 # workflow is taken from the default branch, and this file is not on it.
 #
 # The defect is the last line: a string an outside contributor controls, taken
-# from the trigger payload and interpolated into a shell command that runs with
-# a token and with the base branch's secrets.
+# from the trigger payload and interpolated into a shell command that runs on
+# the base branch's side of the fence.
+#
+# The first attempt at this fixture carried `permissions: {}` and the gate
+# passed it. That is the suite's privilege model rather than a miss: with no
+# token scope there is nothing for the injected command to reach, the query pack
+# reports the medium variant instead of the critical one, and the default suite
+# carries only the critical and high variants. The declaration is left off here
+# so the job inherits the repository's default scopes and the finding is the
+# critical one.
 name: zz-proof-the-gate-bites
 
 on:
   pull_request_target:
     branches: ["**"]
-
-permissions: {}
 
 jobs:
   greet:

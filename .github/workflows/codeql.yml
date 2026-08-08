@@ -18,6 +18,14 @@
 # value into a place that executes it. A finding one produces and the other does
 # not is the ordinary case rather than a sign that one of them is wrong.
 #
+# What the gate refuses is bounded by the query suite, and the bound is not
+# obvious. The default suite for this language loads the critical and high
+# variants of each query and not the medium ones, so the same defect in a
+# workflow that declares no token scope is reported at a severity this gate
+# never sees. That is deliberate on the scanner's side, because an injected
+# command with no scopes to reach is a smaller thing, and it is written here
+# because a reader who assumes the gate refuses every injection will be wrong.
+#
 # The run fails on a finding rather than only reporting one. The analyse action
 # uploads to the code-scanning tab and exits zero whatever it found, so the gate
 # is the step after it, which reads the same SARIF the upload carried and
