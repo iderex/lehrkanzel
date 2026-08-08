@@ -1,0 +1,36 @@
+# The rules, as data rather than as code.
+#
+# One rule per line, five fields separated by a tab: the id, the decision file
+# under docs/decisions/ that the rule holds in place, the subject it reads, the
+# extended regular expression it refuses, and what a hit means in words.
+#
+# The patterns live here rather than inside the script for one reason that is
+# not tidiness. The headless rule refuses a set of invocations in shell scripts,
+# and a script carrying that pattern as a literal would refuse itself on the day
+# it landed. Keeping the vocabulary in a file that is not a shell script is what
+# lets the rule apply to every script including the one that runs it.
+#
+# A rule with no decision behind it is deleted rather than kept, so the decision
+# field is not optional and the run refuses a rule naming a file that is not
+# there.
+#
+# Subjects:
+#   lean       tracked files whose name ends in .lean
+#   tooling    tracked files matching scripts/*.sh, except scripts/*-fixtures.sh
+#   toolchain  workflow files, compared against the version lean-toolchain declares
+#
+# Two bounds on deriv-form-in-statements, written here rather than left to be
+# found. It reads the line that opens a declaration, so a signature spread over
+# several lines with the linear-map form on a later line is not reached. And
+# decision 0004 allows the linear-map form inside the module holding the
+# translation lemmas, which no decision file gives a path to, so that exemption
+# is not expressible and the rule as written would also refuse that module. The
+# tree holds no file the rule can reach today, so nothing legal is being
+# refused; the exemption is owed on the day the module lands.
+no-placeholder	0012-what-a-proof-may-rest-on.md	lean	(^|[^A-Za-z0-9_])sorry([^A-Za-z0-9_]|$)|sorryAx	a placeholder stands in for a missing proof
+no-added-axiom	0012-what-a-proof-may-rest-on.md	lean	^[[:space:]]*(private[[:space:]]+|protected[[:space:]]+)?axiom[[:space:]]	a declaration introduces an axiom
+no-compiled-evaluation	0012-what-a-proof-may-rest-on.md	lean	(^|[^A-Za-z0-9_])native_decide([^A-Za-z0-9_]|$)	a proof step appeals to compiled evaluation rather than to kernel reduction
+no-escape-hatch	0012-what-a-proof-may-rest-on.md	lean	^[[:space:]]*(unsafe|partial)[[:space:]]|@\[extern|@\[implemented_by	a declaration escapes the termination or safety checks
+deriv-form-in-statements	0004-trajectories-and-time.md	lean	^[[:space:]]*(theorem|lemma|def|abbrev|instance)[[:space:]].*(fderiv|HasFDerivAt)	a public statement is written in the linear-map form of the derivative
+headless-tooling	0016-headless-and-unelevated.md	tooling	(^|[^A-Za-z0-9_])(sudo|doas|pkexec|runas|docker|podman|curl|wget)([^A-Za-z0-9_]|$)|DISPLAY|RunAs|--bind|nc[[:space:]]+-l	the tooling reads a display, elevates, binds a listener, uses a container client or reaches the network
+toolchain-declared-once	0002-proof-assistant-and-toolchain.md	toolchain	-	a workflow repeats the toolchain version the tree already declares

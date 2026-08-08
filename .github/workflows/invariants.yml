@@ -1,0 +1,52 @@
+# The rules over the text of the tree, each one holding a decision in place.
+#
+# The rules live in scripts/invariants.rules and the code that applies them in
+# scripts/check-invariants.sh, so a contributor runs the same thing that runs
+# here, before pushing, on a tree with nothing built in it. The fixtures that
+# prove each rule bites run first, so a rule that stopped refusing anything
+# fails as loudly as a change that trips one.
+#
+# Read-only, no network beyond the checkout, and no version string of its own:
+# the check reads the tree for anything it compares against.
+name: invariants
+
+on:
+  # Every branch and every pull request. These rules are written before there is
+  # anything here to build, so the guard has to cover a branch that carries
+  # nothing but documents and scripts.
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+# Read-only: the check only reads the tracked tree.
+permissions:
+  contents: read
+
+# Cancel a superseded run on the same ref so a new push does not queue behind an
+# obsolete check.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  invariants:
+    # This name is the check-run name a protection rule would require, and it is
+    # the name the target board's rule already requires, which is what
+    # docs/parity.md records this control as kept under.
+    name: Enforce greppable invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes via git, so do not persist the GITHUB_TOKEN in
+          # .git/config.
+          persist-credentials: false
+
+      - name: The rules are proven to bite
+        run: ./scripts/check-invariants-fixtures.sh
+
+      - name: Check the tree
+        run: ./scripts/check-invariants.sh
