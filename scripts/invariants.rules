@@ -15,9 +15,19 @@
 # there.
 #
 # Subjects:
-#   lean       tracked files whose name ends in .lean
-#   tooling    tracked files matching scripts/*.sh, except scripts/*-fixtures.sh
-#   toolchain  workflow files, compared against the version lean-toolchain declares
+#   lean        tracked files whose name ends in .lean
+#   tooling     tracked files matching scripts/*.sh, except scripts/*-fixtures.sh
+#   toolchain   workflow files, compared against the version lean-toolchain declares
+#   dependency  workflow files, compared against the revisions lake-manifest.json
+#               declares
+#
+# The two comparing subjects read the tree for their own right-hand side, which
+# is what stops a rule from becoming the second declaration it exists to refuse.
+# What dependency-declared-once cannot see, written here rather than left to be
+# found: it refuses a revision the manifest declares, so a workflow pasting a
+# revision the manifest does not hold, a stale one or one from somewhere else,
+# passes it. That shape is a workflow disagreeing with the pin rather than
+# repeating it, and it needs a resolver rather than a comparison.
 #
 # Two bounds on deriv-form-in-statements, written here rather than left to be
 # found. It reads the line that opens a declaration, so a signature spread over
@@ -34,3 +44,4 @@ no-escape-hatch	0012-what-a-proof-may-rest-on.md	lean	^[[:space:]]*(unsafe|parti
 deriv-form-in-statements	0004-trajectories-and-time.md	lean	^[[:space:]]*(theorem|lemma|def|abbrev|instance)[[:space:]].*(fderiv|HasFDerivAt)	a public statement is written in the linear-map form of the derivative
 headless-tooling	0016-headless-and-unelevated.md	tooling	(^|[^A-Za-z0-9_])(sudo|doas|pkexec|runas|docker|podman|curl|wget)([^A-Za-z0-9_]|$)|DISPLAY|RunAs|--bind|nc[[:space:]]+-l	the tooling reads a display, elevates, binds a listener, uses a container client or reaches the network
 toolchain-declared-once	0002-proof-assistant-and-toolchain.md	toolchain	-	a workflow repeats the toolchain version the tree already declares
+dependency-declared-once	0002-proof-assistant-and-toolchain.md	dependency	-	a workflow repeats a dependency revision the tree already declares

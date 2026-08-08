@@ -19,11 +19,11 @@
 # what decision 0012 says about the cheap half. This is the cheap half. The
 # axiom report is the other one and it is issue #41.
 #
-# A rule whose subject set is empty prints NOT MADE rather than ok, and so does
-# the toolchain rule while the tree declares no toolchain version. Both pass.
-# The distinction is the whole point of printing it: a run over nothing and a
-# run that found nothing are different results and they look identical in an
-# exit code.
+# A rule whose subject set is empty prints NOT MADE rather than ok, and so do
+# the two comparing rules while the tree declares nothing for them to compare
+# against. All of them pass. The distinction is the whole point of printing it:
+# a run over nothing and a run that found nothing are different results and they
+# look identical in an exit code.
 #
 # Deterministic: the verdict is a function of the file list, the bytes of those
 # files, and the rules file. Nothing reads the network, the clock or a working
@@ -137,7 +137,7 @@ subject_files() {
           scripts/*.sh) ;;
           *) continue ;;
         esac ;;
-      toolchain)
+      toolchain|dependency)
         case "$f" in .github/workflows/*.yml|.github/workflows/*.yaml) ;; *) continue ;; esac ;;
       *) continue ;;
     esac
@@ -149,6 +149,22 @@ subject_files() {
 toolchain_version=""
 if grep -qx 'lean-toolchain' "$list" && [ -f "$root/lean-toolchain" ]; then
   toolchain_version=$(tr -d ' \t\r\n' < "$root/lean-toolchain")
+fi
+
+# The revisions the manifest declares, as an alternation. Every package in it
+# counts and not only the one the decision file names, because a revision pasted
+# into a workflow is the same second declaration whichever package it belongs
+# to. A revision is hexadecimal, so it carries no character the pattern would
+# have to escape, and the extraction says so by refusing anything else.
+dependency_revisions=""
+if grep -qx 'lake-manifest.json' "$list" && [ -f "$root/lake-manifest.json" ]; then
+  dependency_revisions=$(
+    grep -oE '"rev"[[:space:]]*:[[:space:]]*"[0-9a-fA-F]{7,40}"' "$root/lake-manifest.json" |
+      sed 's/.*"\([0-9a-fA-F]*\)"$/\1/' |
+      sort -u |
+      tr '\n' '|' |
+      sed 's/|$//'
+  )
 fi
 
 while IFS="$tab" read -r id decision subject pattern detail; do
@@ -178,6 +194,19 @@ while IFS="$tab" read -r id decision subject pattern detail; do
       continue
     fi
     pattern=$(printf '%s' "$toolchain_version" | sed 's/[].[^$\\*\/]/\\&/g')
+  fi
+
+  if [ "$subject" = dependency ]; then
+    if [ -z "$dependency_revisions" ]; then
+      echo "NOT MADE  $id  $decision"
+      echo "          The tree declares no dependency revision, so no workflow was"
+      echo "          compared against one. This rule passed WITHOUT LOOKING. Read it as"
+      echo "          a gap, not as a clean comparison. It starts comparing on the day"
+      echo "          lake-manifest.json lands, which is issue #22."
+      echo
+      continue
+    fi
+    pattern="$dependency_revisions"
   fi
 
   echo "  $id  $decision  $n file(s) in subject $subject"
