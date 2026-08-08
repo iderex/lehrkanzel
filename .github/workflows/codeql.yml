@@ -1,0 +1,104 @@
+# CodeQL over the workflow definitions, and over nothing else.
+#
+# The gate this repository is measured against runs this scanner over its source
+# and over its workflows. Only the workflow half transfers. There is no CodeQL
+# analysis for the language the library will be written in, and the defect class
+# a source analyser looks for is the one the kernel already decides: a proof
+# that compiles is a proof. What stands in place of the source leg is recorded
+# in docs/parity.md, and it is the report of what a result rests on and the
+# invariants table rather than a scanner.
+#
+# The workflows are a different matter. They are ordinary automation carrying a
+# token, they are the most privileged code in this repository, and they are
+# exactly what this scanner is good at.
+#
+# This neither replaces .github/workflows/zizmor.yml nor is replaced by it. The
+# two read a workflow differently: zizmor judges the shape of the document,
+# CodeQL builds a data-flow graph over the expressions and follows an untrusted
+# value into a place that executes it. A finding one produces and the other does
+# not is the ordinary case rather than a sign that one of them is wrong.
+#
+# The run fails on a finding rather than only reporting one. The analyse action
+# uploads to the code-scanning tab and exits zero whatever it found, so the gate
+# is the step after it, which reads the same SARIF the upload carried and
+# refuses a non-empty result set. Gating that way keeps the verdict a function of
+# this file, rather than of a repository setting no reader of this tree can see.
+name: codeql
+
+on:
+  # Pushes to main, and every pull request. The scan is heavier than the other
+  # guards here, so it is not run on every push to every branch; a pull request
+  # is the moment a workflow change can reach main, and that is the moment this
+  # has to have an opinion.
+  push:
+    branches: [main]
+  pull_request:
+    branches: ["**"]
+
+# Deny-all at the workflow level; the job below grants only what it needs.
+permissions: {}
+
+# Cancel a superseded run on the same ref so a new push does not queue behind an
+# obsolete scan. This job publishes nothing, so cancelling it is safe.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      security-events: write # upload the SARIF into the code-scanning tab
+      contents: read # check out the workflows to scan
+    strategy:
+      fail-fast: false
+      matrix:
+        # One entry today. The matrix is here because the name of this check is
+        # read off it, and because a second language is a one-line change on the
+        # day one arrives rather than a rewrite of the job.
+        language: [actions]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step pushes via git, so do not persist the GITHUB_TOKEN in .git/config.
+          persist-credentials: false
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        with:
+          category: /language:${{ matrix.language }}
+          # Write the SARIF beside the upload so the gate below reads the same
+          # bytes the code-scanning tab received, rather than asking the API for
+          # them and depending on when the upload was processed.
+          output: sarif
+          upload: always
+
+      - name: Fail on an actionable finding
+        env:
+          # Through the environment rather than interpolated into the script, so
+          # the shell never sees a workflow expression.
+          LANGUAGE: ${{ matrix.language }}
+        run: |
+          set -eu
+          file="sarif/${LANGUAGE}.sarif"
+          # An absent or unreadable SARIF is a broken scan, not a clean tree.
+          if [ ! -f "$file" ]; then
+            echo "::error::no SARIF at $file - failing closed rather than reading an absent file as a scan that found nothing."
+            exit 1
+          fi
+          count=$(jq '[.runs[].results[]?] | length' "$file")
+          if [ "$count" -gt 0 ]; then
+            jq -r '.runs[].results[]? | "\(.ruleId)\t\(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine)\t\(.message.text)"' "$file"
+            echo "::error::CodeQL reported $count finding(s) over the workflow definitions."
+            exit 1
+          fi
+          echo "CodeQL reported no findings over the workflow definitions."
