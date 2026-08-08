@@ -1,0 +1,23 @@
+# Deliberate violation. This file exists for one commit, to show that the gate
+# added in the previous commit refuses the finding class it names, and it is
+# deleted in the commit after this one. It never runs: a pull_request_target
+# workflow is taken from the default branch, and this file is not on it.
+#
+# The defect is the last line: a string an outside contributor controls, taken
+# from the trigger payload and interpolated into a shell command that runs with
+# a token and with the base branch's secrets.
+name: zz-proof-the-gate-bites
+
+on:
+  pull_request_target:
+    branches: ["**"]
+
+permissions: {}
+
+jobs:
+  greet:
+    name: Greet the pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "thanks for ${{ github.event.pull_request.title }}"
